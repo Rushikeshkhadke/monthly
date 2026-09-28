@@ -15,14 +15,25 @@ class CycleDial extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      height: 240,
+    return Container(
+      width: 280,
+      height: 280,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.06),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Stack(
         alignment: Alignment.center,
         children: [
           CustomPaint(
-            size: const Size(240, 240),
+            size: const Size(260, 260),
             painter: _CycleDialPainter(
               dayStatus: dayStatus,
               prediction: prediction,
@@ -82,6 +93,8 @@ class CycleDial extends StatelessWidget {
         return AppColors.fertile;
       case CyclePhase.ovulation:
         return AppColors.ovulation;
+      case CyclePhase.late:
+        return Colors.deepOrangeAccent;
       case CyclePhase.follicular:
       case CyclePhase.luteal:
       case CyclePhase.none:
@@ -127,10 +140,10 @@ class _CycleDialPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, periodSweep, false, periodPaint);
 
-    // Draw fertile window arc
-    final fertileDaysStart = totalDays - 14 - 5;
+    // Draw fertile window arc (dynamic sweep based on totalDays)
+    final fertileDaysStart = max(0, totalDays - 14 - 5);
     final fertileStartAngle = startAngle + (fertileDaysStart / totalDays) * 2 * pi;
-    const fertileSweep = (6 / 28) * 2 * pi;
+    final fertileSweep = (6 / totalDays) * 2 * pi;
     final fertilePaint = Paint()
       ..color = AppColors.fertile
       ..style = PaintingStyle.stroke
@@ -139,7 +152,8 @@ class _CycleDialPainter extends CustomPainter {
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius), fertileStartAngle, fertileSweep, false, fertilePaint);
 
     // Draw current progress indicator tick/dot
-    final currentDayAngle = startAngle + ((dayStatus.cycleDay - 1) / totalDays) * 2 * pi;
+    final progressFraction = min(1.0, (dayStatus.cycleDay - 1) / totalDays);
+    final currentDayAngle = startAngle + progressFraction * 2 * pi;
     final dotX = center.dx + radius * cos(currentDayAngle);
     final dotY = center.dy + radius * sin(currentDayAngle);
 
@@ -147,7 +161,7 @@ class _CycleDialPainter extends CustomPainter {
       ..color = Colors.white
       ..style = PaintingStyle.fill;
     final dotFillPaint = Paint()
-      ..color = AppColors.primary
+      ..color = dayStatus.phase == CyclePhase.late ? Colors.deepOrangeAccent : AppColors.primary
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(Offset(dotX, dotY), strokeWidth / 2 + 3, dotBorderPaint);

@@ -22,9 +22,30 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget build(BuildContext context) {
     final prediction = ref.watch(predictionProvider);
     final cycles = ref.watch(cyclesProvider);
-    final dayStatus = ref.watch(todayStatusProvider);
+
+    // Compute status for the selected date dynamically
+    final lastCycleStart = cycles.isNotEmpty
+        ? cycles.last.startDate
+        : DateTime.now().subtract(const Duration(days: 13));
+
+    final selectedDayStatus = CyclePredictor.getDayStatus(
+      targetDate: _selectedDate,
+      currentCycleStartDate: lastCycleStart,
+      prediction: prediction,
+    );
 
     final monthTitle = DateFormat('MMMM yyyy').format(_focusedMonth);
+
+    void refreshCalendar() {
+      ref.invalidate(cyclesProvider);
+      ref.invalidate(todayStatusProvider);
+      ref.invalidate(predictionProvider);
+      setState(() {});
+    }
+
+    final progressFraction = selectedDayStatus.totalCycleDays > 0
+        ? (selectedDayStatus.cycleDay / selectedDayStatus.totalCycleDays).clamp(0.0, 1.0)
+        : 0.0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -107,6 +128,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       _buildLegendItem(AppColors.fertile, 'Fertile window'),
                       _buildLegendItem(AppColors.ovulation, 'Ovulation'),
                       _buildLegendItem(AppColors.predicted, 'Predicted period', isBorderOnly: true),
+                      _buildLegendItem(Colors.deepOrangeAccent, 'Overdue'),
                       _buildLegendItem(AppColors.textTertiary, 'Other days'),
                     ],
                   ),
@@ -116,9 +138,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton.icon(
-                      onPressed: () => LogDaySheet.show(context, _selectedDate),
+                      onPressed: () => LogDaySheet.show(
+                        context,
+                        _selectedDate,
+                        onSaved: refreshCalendar,
+                      ),
                       icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                      label: const Text('Log', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      label: Text(
+                        'Log ${DateFormat('d MMM').format(_selectedDate)}',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -130,7 +159,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ),
             ),
 
-            // Bottom Cycle View Progress Bar
+            // Bottom Cycle View Progress Bar for Selected Date
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
@@ -141,18 +170,38 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Cycle view',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Cycle view (${DateFormat('d MMM').format(_selectedDate)})',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          selectedDayStatus.phase.displayName,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
-                      value: dayStatus.cycleDay / dayStatus.totalCycleDays,
+                      value: progressFraction,
                       minHeight: 8,
                       backgroundColor: AppColors.surfaceVariant,
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.fertile),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        selectedDayStatus.phase == CyclePhase.late
+                            ? Colors.deepOrangeAccent
+                            : AppColors.fertile,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -160,12 +209,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Day ${dayStatus.cycleDay} of ${dayStatus.totalCycleDays}',
+                        'Day ${selectedDayStatus.cycleDay} of ${selectedDayStatus.totalCycleDays}',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                       ),
                       Text(
-                        '${dayStatus.daysUntilNextPeriod} days left',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        selectedDayStatus.daysUntilNextPeriod > 0
+                            ? '${selectedDayStatus.daysUntilNextPeriod} days left'
+                            : (selectedDayStatus.phase == CyclePhase.late ? 'Period overdue' : 'Period due'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: selectedDayStatus.phase == CyclePhase.late ? Colors.deepOrangeAccent : AppColors.textSecondary,
+                          fontWeight: selectedDayStatus.phase == CyclePhase.late ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
                     ],
                   ),
@@ -223,6 +278,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         case CyclePhase.predictedPeriod:
           circleColor = AppColors.predicted;
           isBorder = true;
+          break;
+        case CyclePhase.late:
+          circleColor = Colors.deepOrangeAccent;
+          textColor = Colors.white;
           break;
         default:
           circleColor = null;

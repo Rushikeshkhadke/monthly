@@ -1,26 +1,78 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/cycle.dart';
 import '../models/daily_log.dart';
 import '../models/user_settings.dart';
+import 'web_storage.dart';
 
 class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
 
-  // In-memory mock storage for Web preview
+  // Web storage cache
   UserSettings _webSettings = const UserSettings(onboardingCompleted: false);
-  final List<Cycle> _webCycles = [
-    Cycle(
-      startDate: DateTime.now().subtract(const Duration(days: 13)),
-      periodLength: 5,
-      cycleLength: 28,
-    ),
-  ];
+  final List<Cycle> _webCycles = [];
   final Map<String, DailyLog> _webLogs = {};
 
-  AppDatabase._init();
+  AppDatabase._init() {
+    if (kIsWeb) {
+      _initWeb();
+    }
+  }
+
+  void _initWeb() {
+    try {
+      final rawSettings = getWebStorage('monthly_settings');
+      if (rawSettings != null) {
+        final decoded = jsonDecode(rawSettings) as Map<String, dynamic>;
+        _webSettings = UserSettings.fromMap(decoded);
+      }
+
+      final rawCycles = getWebStorage('monthly_cycles');
+      if (rawCycles != null) {
+        final decoded = jsonDecode(rawCycles) as List<dynamic>;
+        _webCycles.clear();
+        for (final item in decoded) {
+          _webCycles.add(Cycle.fromMap(item as Map<String, dynamic>));
+        }
+      } else {
+        _webCycles.add(
+          Cycle(
+            startDate: DateTime.now().subtract(const Duration(days: 13)),
+            periodLength: 5,
+            cycleLength: 28,
+          ),
+        );
+      }
+
+      final rawLogs = getWebStorage('monthly_logs');
+      if (rawLogs != null) {
+        final decoded = jsonDecode(rawLogs) as Map<String, dynamic>;
+        _webLogs.clear();
+        decoded.forEach((key, val) {
+          final logMap = val as Map<String, dynamic>;
+          final symptomsList = (logMap['symptoms'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+          _webLogs[key] = DailyLog.fromMap(logMap, symptoms: symptomsList);
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _persistWeb() {
+    try {
+      saveWebStorage('monthly_settings', jsonEncode(_webSettings.toMap()));
+      saveWebStorage('monthly_cycles', jsonEncode(_webCycles.map((c) => c.toMap()).toList()));
+      final logsMap = <String, dynamic>{};
+      _webLogs.forEach((key, log) {
+        final map = log.toMap();
+        map['symptoms'] = log.symptoms;
+        logsMap[key] = map;
+      });
+      saveWebStorage('monthly_logs', jsonEncode(logsMap));
+    } catch (_) {}
+  }
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -34,12 +86,27 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      try {
+        await db.execute('ALTER TABLE daily_logs ADD COLUMN medication INTEGER NOT NULL DEFAULT 0;');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE daily_logs ADD COLUMN supplements INTEGER NOT NULL DEFAULT 0;');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE daily_logs ADD COLUMN workout INTEGER NOT NULL DEFAULT 0;');
+      } catch (_) {}
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -91,6 +158,9 @@ class AppDatabase {
         mood TEXT,
         pain_level INTEGER NOT NULL DEFAULT 0,
         energy_level INTEGER NOT NULL DEFAULT 3,
+        medication INTEGER NOT NULL DEFAULT 0,
+        supplements INTEGER NOT NULL DEFAULT 0,
+        workout INTEGER NOT NULL DEFAULT 0,
         notes TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -135,6 +205,7 @@ class AppDatabase {
   Future<int> updateSettings(UserSettings settings) async {
     if (kIsWeb) {
       _webSettings = settings;
+      _persistWeb();
       return 1;
     }
 
@@ -159,6 +230,7 @@ class AppDatabase {
   Future<int> insertCycle(Cycle cycle) async {
     if (kIsWeb) {
       _webCycles.add(cycle);
+      _persistWeb();
       return _webCycles.length;
     }
 
@@ -200,6 +272,7 @@ class AppDatabase {
     final dateStr = log.logDate.toIso8601String().split('T').first;
     if (kIsWeb) {
       _webLogs[dateStr] = log;
+      _persistWeb();
       return;
     }
 
@@ -226,6 +299,11 @@ class AppDatabase {
           where: 'daily_log_id = ?',
           whereArgs: [logId],
         );
+        await txn.delete(
+          'tracker_entries',
+          where: 'daily_log_id = ?',
+          whereArgs: [logId],
+        );
       } else {
         logId = await txn.insert('daily_logs', log.toMap());
       }
@@ -237,7 +315,80 @@ class AppDatabase {
           'severity': 1,
         });
       }
+
+      if (log.medication) {
+        await txn.insert('tracker_entries', {
+          'daily_log_id': logId,
+          'tracker_type': 'medication',
+          'name': 'Medication',
+          'is_completed': 1,
+        });
+      }
+      if (log.supplements) {
+        await txn.insert('tracker_entries', {
+          'daily_log_id': logId,
+          'tracker_type': 'supplement',
+          'name': 'Supplements',
+          'is_completed': 1,
+        });
+      }
+      if (log.workout) {
+        await txn.insert('tracker_entries', {
+          'daily_log_id': logId,
+          'tracker_type': 'workout',
+          'name': 'Workout',
+          'is_completed': 1,
+        });
+      }
     });
+  }
+
+  Future<void> deleteDailyLog(DateTime date) async {
+    final dateStr = date.toIso8601String().split('T').first;
+    if (kIsWeb) {
+      _webLogs.remove(dateStr);
+      _persistWeb();
+      return;
+    }
+
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      final existing = await txn.query(
+        'daily_logs',
+        where: 'log_date = ?',
+        whereArgs: [dateStr],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) {
+        final logId = existing.first['id'] as int;
+        await txn.delete('daily_symptoms', where: 'daily_log_id = ?', whereArgs: [logId]);
+        await txn.delete('tracker_entries', where: 'daily_log_id = ?', whereArgs: [logId]);
+        await txn.delete('daily_logs', where: 'id = ?', whereArgs: [logId]);
+      }
+    });
+  }
+
+  Future<List<DailyLog>> getAllDailyLogs() async {
+    if (kIsWeb) {
+      final list = _webLogs.values.toList();
+      list.sort((a, b) => a.logDate.compareTo(b.logDate));
+      return list;
+    }
+
+    final db = await instance.database;
+    final logsMaps = await db.query('daily_logs', orderBy: 'log_date ASC');
+    final List<DailyLog> result = [];
+    for (final map in logsMaps) {
+      final logId = map['id'] as int;
+      final symptomsData = await db.query(
+        'daily_symptoms',
+        where: 'daily_log_id = ?',
+        whereArgs: [logId],
+      );
+      final symptoms = symptomsData.map((s) => s['symptom_key'] as String).toList();
+      result.add(DailyLog.fromMap(map, symptoms: symptoms));
+    }
+    return result;
   }
 
   Future<List<DailyLog>> getDailyLogsForRange(DateTime start, DateTime end) async {

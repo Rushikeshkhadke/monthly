@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/providers/cycle_providers.dart';
 import '../logging/widgets/log_day_sheet.dart';
+import '../settings/reminders_screen.dart';
 import 'widgets/cycle_dial.dart';
 
 class TodayScreen extends ConsumerWidget {
@@ -18,6 +19,12 @@ class TodayScreen extends ConsumerWidget {
 
     final startStr = DateFormat('d MMM').format(prediction.nextPeriodStartDate);
     final endStr = DateFormat('d MMM yyyy').format(prediction.nextPeriodEndDate);
+
+    void refreshCycleState() {
+      ref.invalidate(todayStatusProvider);
+      ref.invalidate(cyclesProvider);
+      ref.invalidate(predictionProvider);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -59,7 +66,11 @@ class TodayScreen extends ConsumerWidget {
                   ),
                   child: IconButton(
                     icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textPrimary),
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const RemindersScreen()),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -129,9 +140,7 @@ class TodayScreen extends ConsumerWidget {
             // Log Today Primary Button
             ElevatedButton.icon(
               onPressed: () {
-                LogDaySheet.show(context, DateTime.now(), onSaved: () {
-                  ref.invalidate(todayStatusProvider);
-                });
+                LogDaySheet.show(context, DateTime.now(), onSaved: refreshCycleState);
               },
               icon: const Icon(Icons.add, color: Colors.white, size: 20),
               label: const Text('Log today', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -156,7 +165,7 @@ class TodayScreen extends ConsumerWidget {
                     context: context,
                     icon: '😊',
                     title: 'Mood',
-                    onTap: () => LogDaySheet.show(context, DateTime.now()),
+                    onTap: () => LogDaySheet.show(context, DateTime.now(), onSaved: refreshCycleState),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -165,7 +174,7 @@ class TodayScreen extends ConsumerWidget {
                     context: context,
                     icon: '⚡',
                     title: 'Pain',
-                    onTap: () => LogDaySheet.show(context, DateTime.now()),
+                    onTap: () => LogDaySheet.show(context, DateTime.now(), onSaved: refreshCycleState),
                   ),
                 ),
               ],
@@ -178,7 +187,7 @@ class TodayScreen extends ConsumerWidget {
                     context: context,
                     icon: '💧',
                     title: 'Flow',
-                    onTap: () => LogDaySheet.show(context, DateTime.now()),
+                    onTap: () => LogDaySheet.show(context, DateTime.now(), onSaved: refreshCycleState),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -187,7 +196,7 @@ class TodayScreen extends ConsumerWidget {
                     context: context,
                     icon: '🔋',
                     title: 'Energy',
-                    onTap: () => LogDaySheet.show(context, DateTime.now()),
+                    onTap: () => LogDaySheet.show(context, DateTime.now(), onSaved: refreshCycleState),
                   ),
                 ),
               ],

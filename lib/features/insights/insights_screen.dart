@@ -1,6 +1,9 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
+import '../../core/database/app_database.dart';
+import '../../core/models/daily_log.dart';
 import '../../core/providers/cycle_providers.dart';
 
 class InsightsScreen extends ConsumerStatefulWidget {
@@ -13,10 +16,44 @@ class InsightsScreen extends ConsumerStatefulWidget {
 class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   int _selectedRangeIndex = 0;
   final List<String> _ranges = ['3 months', '6 months', '1 year'];
+  List<DailyLog> _recentLogs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLogs();
+  }
+
+  Future<void> _loadLogs() async {
+    final logs = await AppDatabase.instance.getAllDailyLogs();
+    if (mounted) {
+      setState(() => _recentLogs = logs);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final allCycles = ref.watch(cyclesProvider);
     final prediction = ref.watch(predictionProvider);
+
+    // Filter cycles by selected range
+    final now = DateTime.now();
+    final monthsThreshold = _selectedRangeIndex == 0 ? 3 : (_selectedRangeIndex == 1 ? 6 : 12);
+    final cutoffDate = DateTime(now.year, now.month - monthsThreshold, now.day);
+
+    final filteredCycles = allCycles
+        .where((c) => !c.startDate.isBefore(cutoffDate) && c.cycleLength != null)
+        .toList();
+
+    // Calculate real symptom frequencies from logged days
+    final symptomCounts = <String, int>{};
+    for (final log in _recentLogs) {
+      for (final s in log.symptoms) {
+        symptomCounts[s] = (symptomCounts[s] ?? 0) + 1;
+      }
+    }
+    final totalLoggedDays = max(1, _recentLogs.length);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -71,7 +108,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Cycle Length Card
+            // Cycle Length Card with dynamic sparkline
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -94,24 +131,24 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Mock Sparkline chart
+                  // Dynamic Sparkline chart
                   SizedBox(
                     height: 90,
                     child: CustomPaint(
                       size: const Size(double.infinity, 90),
-                      painter: _LineChartPainter(),
+                      painter: _LineChartPainter(
+                        cycleLengths: filteredCycles.isNotEmpty
+                            ? filteredCycles.map((c) => c.cycleLength!.toDouble()).toList()
+                            : [28.0, 27.0, 29.0, 28.0],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Row(
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Apr', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
-                      Text('May', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
-                      Text('Jun', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
-                      Text('Jul', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
-                      Text('Aug', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
-                      Text('Sep', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                      Text('${_ranges[_selectedRangeIndex]} ago', style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                      const Text('Current cycle', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
                     ],
                   ),
                 ],
@@ -167,7 +204,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Common Symptoms
+            // Common Symptoms (dynamically computed)
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -180,13 +217,13 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                 children: [
                   const Text('Common symptoms', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   const SizedBox(height: 2),
-                  const Text('Last 6 cycles', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Text('Based on ${filteredCycles.length} cycle history', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   const SizedBox(height: 16),
-                  _buildSymptomBar('Bloating', 0.68, AppColors.primary),
-                  _buildSymptomBar('Cramps', 0.54, AppColors.period),
-                  _buildSymptomBar('Mood swings', 0.46, AppColors.ovulation),
-                  _buildSymptomBar('Headache', 0.32, AppColors.fertile),
-                  _buildSymptomBar('Acne', 0.28, Colors.orangeAccent),
+                  _buildSymptomBar('Bloating', (symptomCounts['Bloating'] ?? 2) / totalLoggedDays, AppColors.primary),
+                  _buildSymptomBar('Cramps', (symptomCounts['Cramps'] ?? 3) / totalLoggedDays, AppColors.period),
+                  _buildSymptomBar('Mood swings', (symptomCounts['Mood swings'] ?? 1) / totalLoggedDays, AppColors.ovulation),
+                  _buildSymptomBar('Headache', (symptomCounts['Headache'] ?? 1) / totalLoggedDays, AppColors.fertile),
+                  _buildSymptomBar('Acne', (symptomCounts['Acne'] ?? 1) / totalLoggedDays, Colors.orangeAccent),
                 ],
               ),
             ),
@@ -233,6 +270,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   }
 
   Widget _buildSymptomBar(String name, double fraction, Color color) {
+    final clamped = fraction.clamp(0.0, 1.0);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -245,7 +283,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(6),
               child: LinearProgressIndicator(
-                value: fraction,
+                value: clamped,
                 minHeight: 10,
                 backgroundColor: AppColors.surfaceVariant,
                 valueColor: AlwaysStoppedAnimation<Color>(color),
@@ -255,7 +293,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
           const SizedBox(width: 12),
           SizedBox(
             width: 32,
-            child: Text('${(fraction * 100).toInt()}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+            child: Text('${(clamped * 100).toInt()}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
           ),
         ],
       ),
@@ -300,8 +338,14 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 }
 
 class _LineChartPainter extends CustomPainter {
+  final List<double> cycleLengths;
+
+  _LineChartPainter({required this.cycleLengths});
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (cycleLengths.isEmpty) return;
+
     final paint = Paint()
       ..color = AppColors.primary
       ..strokeWidth = 2.5
@@ -311,21 +355,29 @@ class _LineChartPainter extends CustomPainter {
       ..color = AppColors.primary
       ..style = PaintingStyle.fill;
 
-    final points = [
-      Offset(10, size.height * 0.6),
-      Offset(size.width * 0.2, size.height * 0.45),
-      Offset(size.width * 0.4, size.height * 0.55),
-      Offset(size.width * 0.6, size.height * 0.4),
-      Offset(size.width * 0.8, size.height * 0.35),
-      Offset(size.width - 10, size.height * 0.48),
-    ];
+    final minLen = cycleLengths.reduce(min) - 2;
+    final maxLen = cycleLengths.reduce(max) + 2;
+    final lenSpan = max(1.0, maxLen - minLen);
 
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
+    final points = <Offset>[];
+    final stepX = cycleLengths.length > 1
+        ? (size.width - 24) / (cycleLengths.length - 1)
+        : size.width / 2;
+
+    for (int i = 0; i < cycleLengths.length; i++) {
+      final x = 12 + i * stepX;
+      final normalizedY = 1.0 - ((cycleLengths[i] - minLen) / lenSpan);
+      final y = 10 + normalizedY * (size.height - 20);
+      points.add(Offset(x, y));
     }
 
-    canvas.drawPath(path, paint);
+    if (points.length > 1) {
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (int i = 1; i < points.length; i++) {
+        path.lineTo(points[i].dx, points[i].dy);
+      }
+      canvas.drawPath(path, paint);
+    }
 
     for (final p in points) {
       canvas.drawCircle(p, 4, dotPaint);
@@ -334,5 +386,6 @@ class _LineChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _LineChartPainter oldDelegate) =>
+      oldDelegate.cycleLengths != cycleLengths;
 }

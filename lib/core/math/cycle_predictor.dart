@@ -8,6 +8,7 @@ enum CyclePhase {
   ovulation,
   luteal,
   predictedPeriod,
+  late,
   none;
 
   String get displayName {
@@ -24,6 +25,8 @@ enum CyclePhase {
         return 'Luteal phase';
       case CyclePhase.predictedPeriod:
         return 'Predicted period';
+      case CyclePhase.late:
+        return 'Period overdue';
       case CyclePhase.none:
         return 'Cycle day';
     }
@@ -40,6 +43,7 @@ enum CyclePhase {
       case CyclePhase.menstrual:
       case CyclePhase.luteal:
       case CyclePhase.predictedPeriod:
+      case CyclePhase.late:
       case CyclePhase.none:
         return 'Very low chance of conception';
     }
@@ -214,7 +218,9 @@ class CyclePredictor {
       final nextStart = normalizeDate(prediction.nextPeriodStartDate);
       final nextEnd = normalizeDate(prediction.nextPeriodEndDate);
 
-      if (isDateInRange(target, nextStart, nextEnd)) {
+      if (target.isAfter(nextEnd)) {
+        phase = CyclePhase.late;
+      } else if (isDateInRange(target, nextStart, nextEnd)) {
         phase = CyclePhase.predictedPeriod;
       } else if (isSameDay(target, ovulation)) {
         phase = CyclePhase.ovulation;

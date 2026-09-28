@@ -10,6 +10,9 @@ class LearnScreen extends StatefulWidget {
 
 class _LearnScreenState extends State<LearnScreen> {
   int _selectedCategoryIndex = 0;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   final List<String> _categories = ['All', 'Cycle basics', 'PCOS', 'Nutrition', 'Fitness', 'Teen guide'];
 
   final List<Map<String, dynamic>> _articles = [
@@ -19,7 +22,7 @@ class _LearnScreenState extends State<LearnScreen> {
       'icon': '🩸',
       'color': AppColors.periodLight,
       'category': 'Cycle basics',
-      'summary': 'The menstrual cycle is a monthly sequence of hormonal events coordinated between your brain and ovaries.',
+      'summary': 'The menstrual cycle is a monthly sequence of hormonal events coordinated between your brain and ovaries. It is divided into 4 primary phases: Menstrual, Follicular, Ovulation, and Luteal.',
     },
     {
       'title': 'What is ovulation and fertile window?',
@@ -27,7 +30,7 @@ class _LearnScreenState extends State<LearnScreen> {
       'icon': '✨',
       'color': AppColors.fertileLight,
       'category': 'Cycle basics',
-      'summary': 'Ovulation occurs once per cycle when a mature ovarian follicle releases an egg.',
+      'summary': 'Ovulation occurs once per cycle when a mature ovarian follicle releases an egg. The fertile window spans 5 days prior to ovulation plus ovulation day itself.',
     },
     {
       'title': 'Nutrition for hormonal balance',
@@ -35,7 +38,7 @@ class _LearnScreenState extends State<LearnScreen> {
       'icon': '🥑',
       'color': AppColors.ovulationLight,
       'category': 'Nutrition',
-      'summary': 'How whole foods, seeds, and healthy fats support progesterone and estrogen cycles.',
+      'summary': 'How whole foods, seeds, and healthy fats support progesterone and estrogen cycles. Focus on leafy greens, magnesium, and omega-3 fatty acids.',
     },
     {
       'title': 'Exercise and your cycle',
@@ -43,7 +46,7 @@ class _LearnScreenState extends State<LearnScreen> {
       'icon': '🏃‍♀️',
       'color': AppColors.primaryLight,
       'category': 'Fitness',
-      'summary': 'Syncing strength training, cardio, and restorative yoga with your natural energy shifts.',
+      'summary': 'Syncing strength training, cardio, and restorative yoga with your natural energy shifts across follicular and luteal phases.',
     },
     {
       'title': 'Managing period pain naturally',
@@ -51,15 +54,43 @@ class _LearnScreenState extends State<LearnScreen> {
       'icon': '🌿',
       'color': AppColors.periodLight,
       'category': 'Cycle basics',
-      'summary': 'Heat therapy, magnesium, anti-inflammatory teas, and gentle mobility work.',
+      'summary': 'Heat therapy, magnesium, anti-inflammatory teas, and gentle mobility work can significantly relieve dysmenorrhea without heavy medication.',
+    },
+    {
+      'title': 'Understanding PCOS & Irregular Cycles',
+      'duration': '7 min read',
+      'icon': '🩺',
+      'color': AppColors.ovulationLight,
+      'category': 'PCOS',
+      'summary': 'Polycystic Ovary Syndrome causes hormonal imbalances that affect ovulation frequency, insulin sensitivity, and cycle duration.',
+    },
+    {
+      'title': 'First periods: A Guide for Teens',
+      'duration': '4 min read',
+      'icon': '🌸',
+      'color': AppColors.primaryLight,
+      'category': 'Teen guide',
+      'summary': 'What to expect during menarche, how cycle patterns normalize over the first 2-3 years, and healthy hygiene tips.',
     },
   ];
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final filteredArticles = _selectedCategoryIndex == 0
-        ? _articles
-        : _articles.where((a) => a['category'] == _categories[_selectedCategoryIndex]).toList();
+    final query = _searchQuery.trim().toLowerCase();
+    final filteredArticles = _articles.where((a) {
+      final matchesCategory = _selectedCategoryIndex == 0 ||
+          a['category'] == _categories[_selectedCategoryIndex];
+      final matchesSearch = query.isEmpty ||
+          (a['title'] as String).toLowerCase().contains(query) ||
+          (a['summary'] as String).toLowerCase().contains(query);
+      return matchesCategory && matchesSearch;
+    }).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -77,12 +108,23 @@ class _LearnScreenState extends State<LearnScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Search Bar
+            // Search Bar with Active Filter Controller
             TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val),
               decoration: InputDecoration(
                 hintText: 'Search articles...',
                 hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
                 prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
                 filled: true,
                 fillColor: AppColors.surface,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -132,8 +174,43 @@ class _LearnScreenState extends State<LearnScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Article List
-            ...filteredArticles.map((article) => _buildArticleCard(context, article)),
+            // Article List or Empty State
+            if (filteredArticles.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                alignment: Alignment.center,
+                child: Column(
+                  children: [
+                    const Text('🔍', style: TextStyle(fontSize: 48)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No articles found',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _searchQuery.isNotEmpty
+                          ? 'No results matching "$_searchQuery"'
+                          : 'No articles currently in this category.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _searchQuery = '';
+                          _selectedCategoryIndex = 0;
+                        });
+                      },
+                      child: const Text('Reset filters'),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...filteredArticles.map((article) => _buildArticleCard(context, article)),
           ],
         ),
       ),

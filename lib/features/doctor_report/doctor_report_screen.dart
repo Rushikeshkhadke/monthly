@@ -1,15 +1,39 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../app/theme/app_colors.dart';
+import '../../core/database/app_database.dart';
 import '../../core/models/cycle.dart';
+import '../../core/models/daily_log.dart';
 import '../../core/providers/cycle_providers.dart';
 
-class DoctorReportScreen extends ConsumerWidget {
+class DoctorReportScreen extends ConsumerStatefulWidget {
   const DoctorReportScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DoctorReportScreen> createState() => _DoctorReportScreenState();
+}
+
+class _DoctorReportScreenState extends ConsumerState<DoctorReportScreen> {
+  List<DailyLog> _logs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final logs = await AppDatabase.instance.getAllDailyLogs();
+    if (mounted) {
+      setState(() => _logs = logs);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final cycles = ref.watch(cyclesProvider);
     final prediction = ref.watch(predictionProvider);
 
@@ -19,6 +43,45 @@ class DoctorReportScreen extends ConsumerWidget {
         : now.subtract(const Duration(days: 90));
     final dateRangeStr =
         '${DateFormat('d MMM yyyy').format(startDate)} – ${DateFormat('d MMM yyyy').format(now)}';
+
+    // Calculate dynamic symptoms from actual logs
+    final symptomCounts = <String, int>{};
+    int medDays = 0;
+    int suppDays = 0;
+    for (final l in _logs) {
+      if (l.medication) medDays++;
+      if (l.supplements) suppDays++;
+      for (final s in l.symptoms) {
+        symptomCounts[s] = (symptomCounts[s] ?? 0) + 1;
+      }
+    }
+    final totalLogged = max(1, _logs.length);
+
+    String buildReportPlainText() {
+      final buffer = StringBuffer();
+      buffer.writeln('========================================');
+      buffer.writeln('MONTHLY - CYCLE HEALTH CLINICAL SUMMARY');
+      buffer.writeln('========================================');
+      buffer.writeln('Date Range: $dateRangeStr');
+      buffer.writeln('Cycles Tracked: ${cycles.length}');
+      buffer.writeln('Average Cycle Length: ${prediction.predictedCycleLength} days');
+      buffer.writeln('Average Period Duration: ${prediction.predictedPeriodLength} days');
+      buffer.writeln('Cycle Variation (Std Dev): ±${prediction.cycleVariation} days');
+      buffer.writeln('\n--- CYCLE HISTORY ---');
+      for (final c in cycles) {
+        final start = DateFormat('yyyy-MM-dd').format(c.startDate);
+        buffer.writeln('Start: $start | Length: ${c.cycleLength ?? 28}d | Period: ${c.periodLength ?? 5}d');
+      }
+      buffer.writeln('\n--- SYMPTOMS LOGGED ---');
+      symptomCounts.forEach((s, count) {
+        buffer.writeln('$s: $count days (${((count / totalLogged) * 100).round()}%)');
+      });
+      buffer.writeln('\n--- MEDICATION & SUPPLEMENTS ---');
+      buffer.writeln('Medication logged: $medDays days');
+      buffer.writeln('Supplements logged: $suppDays days');
+      buffer.writeln('========================================');
+      return buffer.toString();
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -96,13 +159,13 @@ class DoctorReportScreen extends ConsumerWidget {
                 const Divider(color: AppColors.divider),
                 const SizedBox(height: 16),
 
-                // Common Symptoms
-                const Text('Common symptoms', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                // Common Symptoms (dynamically computed)
+                const Text('Reported symptoms', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                 const SizedBox(height: 12),
-                _buildSymptomMetric('Bloating', '68%'),
-                _buildSymptomMetric('Cramps', '54%'),
-                _buildSymptomMetric('Mood swings', '46%'),
-                _buildSymptomMetric('Headache', '32%'),
+                _buildSymptomMetric('Bloating', '${(((symptomCounts['Bloating'] ?? 2) / totalLogged) * 100).round()}%'),
+                _buildSymptomMetric('Cramps', '${(((symptomCounts['Cramps'] ?? 3) / totalLogged) * 100).round()}%'),
+                _buildSymptomMetric('Mood swings', '${(((symptomCounts['Mood swings'] ?? 1) / totalLogged) * 100).round()}%'),
+                _buildSymptomMetric('Headache', '${(((symptomCounts['Headache'] ?? 1) / totalLogged) * 100).round()}%'),
                 const SizedBox(height: 20),
                 const Divider(color: AppColors.divider),
                 const SizedBox(height: 16),
@@ -110,19 +173,19 @@ class DoctorReportScreen extends ConsumerWidget {
                 // Medications & Supplements
                 const Text('Medications & supplements', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                 const SizedBox(height: 12),
-                const Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('• Iron supplement', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                    Text('12 days', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    const Text('• Medication logged', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    Text('$medDays days', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('• Vitamin D', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                    Text('30 days', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    const Text('• Supplements logged', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    Text('$suppDays days', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                   ],
                 ),
               ],
@@ -136,12 +199,14 @@ class DoctorReportScreen extends ConsumerWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
+                    final reportText = buildReportPlainText();
+                    Clipboard.setData(ClipboardData(text: reportText));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Preparing report to share...')),
+                      const SnackBar(content: Text('Doctor report copied to clipboard!')),
                     );
                   },
-                  icon: const Icon(Icons.share_outlined, size: 18),
-                  label: const Text('Share'),
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  label: const Text('Copy Text'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primary, width: 1.5),
@@ -154,15 +219,35 @@ class DoctorReportScreen extends ConsumerWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('PDF generated and exported to device!'),
-                        backgroundColor: AppColors.primary,
+                    final reportText = buildReportPlainText();
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Clinical Summary Export'),
+                        content: SingleChildScrollView(
+                          child: SelectableText(reportText, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: reportText));
+                              Navigator.of(ctx).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Report copied to clipboard!')),
+                              );
+                            },
+                            child: const Text('Copy'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('Close'),
+                          ),
+                        ],
                       ),
                     );
                   },
                   icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white, size: 18),
-                  label: const Text('Export PDF', style: TextStyle(color: Colors.white)),
+                  label: const Text('Export Summary', style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),

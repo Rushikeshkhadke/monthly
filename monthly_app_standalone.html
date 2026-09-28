@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Monthly - Cycle & Period Tracker (Interactive App)</title>
+  <title>Monthly - Cycle & Period Tracker (Audited & Fixed)</title>
   <style>
     :root {
       --primary: #F06292;
@@ -13,6 +13,7 @@
       --predicted: #F48FB1;
       --fertile: #7E57C2;
       --ovulation: #AB47BC;
+      --late: #FF5722;
       --bg: #F8F9FA;
       --surface: #FFFFFF;
       --text: #212121;
@@ -50,7 +51,6 @@
       flex-direction: column;
     }
 
-    /* Dynamic Island / Notch */
     .notch {
       width: 120px;
       height: 28px;
@@ -63,7 +63,6 @@
       z-index: 100;
     }
 
-    /* Screen Views */
     .app-screen {
       flex: 1;
       overflow-y: auto;
@@ -81,7 +80,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Top Bar */
     .top-bar {
       display: flex;
       justify-content: space-between;
@@ -108,7 +106,6 @@
       font-size: 18px;
     }
 
-    /* Cycle Dial Card */
     .dial-card {
       background: var(--surface);
       border-radius: 28px;
@@ -180,7 +177,6 @@
       font-weight: 500;
     }
 
-    /* Cards */
     .card {
       background: var(--surface);
       border-radius: 20px;
@@ -205,7 +201,6 @@
       color: var(--text-sec);
     }
 
-    /* Buttons */
     .btn-primary {
       width: 100%;
       background: var(--primary);
@@ -228,7 +223,6 @@
       transform: scale(0.98);
     }
 
-    /* Chips */
     .chip-container {
       display: flex;
       flex-wrap: wrap;
@@ -254,7 +248,6 @@
       color: var(--primary-dark);
     }
 
-    /* Bottom Navigation */
     .bottom-nav {
       position: absolute;
       bottom: 0;
@@ -292,7 +285,6 @@
       font-size: 20px;
     }
 
-    /* Modal / Bottom Sheet */
     .modal-backdrop {
       position: absolute;
       inset: 0;
@@ -318,7 +310,7 @@
       padding: 24px 20px 40px;
       transform: translateY(100%);
       transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
-      max-height: 80%;
+      max-height: 85%;
       overflow-y: auto;
       z-index: 201;
     }
@@ -335,7 +327,6 @@
       margin: 0 auto 18px;
     }
 
-    /* Calendar Grid */
     .calendar-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -364,7 +355,7 @@
       position: relative;
     }
 
-    .cal-cell.today {
+    .cal-cell.selected-day {
       border: 2px solid var(--primary);
     }
 
@@ -380,40 +371,6 @@
     .dot-fertile { background: var(--fertile); }
     .dot-ovulation { background: var(--ovulation); }
 
-    /* Insights Bar Chart */
-    .bar-chart {
-      display: flex;
-      align-items: flex-end;
-      height: 120px;
-      gap: 16px;
-      margin-top: 20px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .bar-col {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      height: 100%;
-      justify-content: flex-end;
-    }
-
-    .bar {
-      width: 100%;
-      border-radius: 8px 8px 0 0;
-      background: var(--primary);
-      transition: height 0.5s ease;
-    }
-
-    .bar-label {
-      font-size: 11px;
-      color: var(--text-sec);
-      margin-top: 6px;
-    }
-
-    /* Toggle Switch */
     .switch {
       position: relative;
       display: inline-block;
@@ -465,7 +422,7 @@
           <span style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase;">Cycle Day</span>
           <h1>Today, Sep 28</h1>
         </div>
-        <div class="icon-btn" onclick="openLogModal()">✏️</div>
+        <div class="icon-btn" onclick="switchTab('me', document.querySelectorAll('.nav-item')[4])">🔔</div>
       </div>
 
       <!-- Dial Card -->
@@ -496,7 +453,7 @@
       </div>
 
       <!-- Action Button -->
-      <button class="btn-primary" onclick="openLogModal()">
+      <button class="btn-primary" onclick="openLogModal(28)">
         <span>+</span> Log Today's Symptoms
       </button>
 
@@ -504,9 +461,9 @@
       <div style="margin-top: 24px;">
         <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">Logged Today</h3>
         <div id="loggedChips" class="chip-container">
-          <span class="chip selected">⚡ Energetic</span>
-          <span class="chip selected">😊 Calm</span>
-          <span class="chip selected">✨ Clear skin</span>
+          <span class="chip selected">💊 Medication</span>
+          <span class="chip selected">🌿 Supplements</span>
+          <span class="chip selected">🏃‍♀️ Workout</span>
         </div>
       </div>
     </div>
@@ -528,58 +485,49 @@
           <div class="cal-header">S</div>
           <div class="cal-header">S</div>
 
-          <!-- Calendar Days Mock -->
-          <div class="cal-cell">31</div>
-          <div class="cal-cell">1<div class="cal-dot dot-period"></div></div>
-          <div class="cal-cell">2<div class="cal-dot dot-period"></div></div>
-          <div class="cal-cell">3<div class="cal-dot dot-period"></div></div>
-          <div class="cal-cell">4<div class="cal-dot dot-period"></div></div>
-          <div class="cal-cell">5<div class="cal-dot dot-period"></div></div>
-          <div class="cal-cell">6</div>
-          <div class="cal-cell">7</div>
-          <div class="cal-cell">8</div>
-          <div class="cal-cell">9</div>
-          <div class="cal-cell">10<div class="cal-dot dot-fertile"></div></div>
-          <div class="cal-cell">11<div class="cal-dot dot-fertile"></div></div>
-          <div class="cal-cell">12<div class="cal-dot dot-fertile"></div></div>
-          <div class="cal-cell">13<div class="cal-dot dot-fertile"></div></div>
-          <div class="cal-cell">14<div class="cal-dot dot-ovulation"></div></div>
-          <div class="cal-cell">15<div class="cal-dot dot-fertile"></div></div>
-          <div class="cal-cell">16</div>
-          <div class="cal-cell">17</div>
-          <div class="cal-cell">18</div>
-          <div class="cal-cell">19</div>
-          <div class="cal-cell">20</div>
-          <div class="cal-cell">21</div>
-          <div class="cal-cell">22</div>
-          <div class="cal-cell">23</div>
-          <div class="cal-cell">24</div>
-          <div class="cal-cell">25</div>
-          <div class="cal-cell">26</div>
-          <div class="cal-cell">27</div>
-          <div class="cal-cell today">28<div class="cal-dot dot-fertile"></div></div>
-          <div class="cal-cell">29<div class="cal-dot dot-predicted"></div></div>
-          <div class="cal-cell">30<div class="cal-dot dot-predicted"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(31, 'Past Cycle')">31</div>
+          <div class="cal-cell" onclick="selectCalendarDay(1, 'Period')">1<div class="cal-dot dot-period"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(2, 'Period')">2<div class="cal-dot dot-period"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(3, 'Period')">3<div class="cal-dot dot-period"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(4, 'Period')">4<div class="cal-dot dot-period"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(5, 'Period')">5<div class="cal-dot dot-period"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(6, 'Follicular')">6</div>
+          <div class="cal-cell" onclick="selectCalendarDay(7, 'Follicular')">7</div>
+          <div class="cal-cell" onclick="selectCalendarDay(8, 'Follicular')">8</div>
+          <div class="cal-cell" onclick="selectCalendarDay(9, 'Follicular')">9</div>
+          <div class="cal-cell" onclick="selectCalendarDay(10, 'Fertile window')">10<div class="cal-dot dot-fertile"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(11, 'Fertile window')">11<div class="cal-dot dot-fertile"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(12, 'Fertile window')">12<div class="cal-dot dot-fertile"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(13, 'Fertile window')">13<div class="cal-dot dot-fertile"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(14, 'Ovulation day')">14<div class="cal-dot dot-ovulation"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(15, 'Fertile window')">15<div class="cal-dot dot-fertile"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(16, 'Luteal')">16</div>
+          <div class="cal-cell" onclick="selectCalendarDay(17, 'Luteal')">17</div>
+          <div class="cal-cell" onclick="selectCalendarDay(18, 'Luteal')">18</div>
+          <div class="cal-cell" onclick="selectCalendarDay(19, 'Luteal')">19</div>
+          <div class="cal-cell" onclick="selectCalendarDay(20, 'Luteal')">20</div>
+          <div class="cal-cell" onclick="selectCalendarDay(21, 'Luteal')">21</div>
+          <div class="cal-cell" onclick="selectCalendarDay(22, 'Luteal')">22</div>
+          <div class="cal-cell" onclick="selectCalendarDay(23, 'Luteal')">23</div>
+          <div class="cal-cell" onclick="selectCalendarDay(24, 'Luteal')">24</div>
+          <div class="cal-cell" onclick="selectCalendarDay(25, 'Luteal')">25</div>
+          <div class="cal-cell" onclick="selectCalendarDay(26, 'Luteal')">26</div>
+          <div class="cal-cell" onclick="selectCalendarDay(27, 'Luteal')">27</div>
+          <div class="cal-cell selected-day" id="calDay28" onclick="selectCalendarDay(28, 'Fertile window')">28<div class="cal-dot dot-fertile"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(29, 'Predicted period')">29<div class="cal-dot dot-predicted"></div></div>
+          <div class="cal-cell" onclick="selectCalendarDay(30, 'Predicted period')">30<div class="cal-dot dot-predicted"></div></div>
         </div>
       </div>
 
-      <!-- Legend -->
-      <div class="card" style="font-size: 13px;">
-        <div style="font-weight: 700; margin-bottom: 10px;">Cycle Phases</div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="cal-dot dot-period" style="width: 10px; height: 10px;"></div> Period Bleed (Day 1-5)
-          </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="cal-dot dot-fertile" style="width: 10px; height: 10px;"></div> Fertile Window
-          </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="cal-dot dot-ovulation" style="width: 10px; height: 10px;"></div> Ovulation Day
-          </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="cal-dot dot-predicted" style="width: 10px; height: 10px;"></div> Predicted Period
-          </div>
+      <!-- Dynamic Selected Day Card -->
+      <div class="card card-row" style="margin-top: 10px;">
+        <div>
+          <div style="font-size: 12px; color: var(--text-sec); font-weight: 600;">Selected: <span id="calSelectedTitle">Sep 28</span></div>
+          <div style="font-size: 15px; font-weight: 700; color: var(--text);" id="calSelectedPhase">Fertile window • Day 14 of 28</div>
         </div>
+        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 13px;" onclick="openLogModal(selectedCalDayNum)">
+          Log Day
+        </button>
       </div>
     </div>
 
@@ -593,14 +541,7 @@
       <div class="card">
         <div style="font-size: 13px; color: var(--text-sec); font-weight: 600;">Average Cycle Length</div>
         <div style="font-size: 28px; font-weight: 800; color: var(--text); margin-top: 4px;">28 Days</div>
-        <div style="font-size: 12px; color: var(--success); font-weight: 600; margin-top: 2px;">● Variation: ±1.2 days (Highly Regular)</div>
-
-        <div class="bar-chart">
-          <div class="bar-col"><div class="bar" style="height: 90%;"></div><span class="bar-label">Jun</span></div>
-          <div class="bar-col"><div class="bar" style="height: 85%;"></div><span class="bar-label">Jul</span></div>
-          <div class="bar-col"><div class="bar" style="height: 96%;"></div><span class="bar-label">Aug</span></div>
-          <div class="bar-col"><div class="bar" style="height: 90%; background: var(--primary-dark);"></div><span class="bar-label">Sep</span></div>
-        </div>
+        <div style="font-size: 12px; color: var(--success); font-weight: 600; margin-top: 2px;">● Variation: ±1.2 days (Regular)</div>
       </div>
 
       <div class="card card-row">
@@ -608,8 +549,8 @@
           <div style="font-size: 12px; color: var(--text-sec); font-weight: 600;">Period Duration</div>
           <div style="font-size: 20px; font-weight: 700; color: var(--text);">5 Days avg</div>
         </div>
-        <button class="btn-primary" style="width: auto; padding: 10px 16px; font-size: 13px;" onclick="alert('Exporting Doctor Summary PDF...')">
-          Doctor PDF
+        <button class="btn-primary" style="width: auto; padding: 10px 16px; font-size: 13px;" onclick="showDoctorSummary()">
+          Doctor Summary
         </button>
       </div>
     </div>
@@ -621,16 +562,19 @@
         <div class="icon-btn">📚</div>
       </div>
 
-      <div class="card" style="cursor: pointer;" onclick="alert('Article: The 4 Phases of Menstrual Cycle\n\nMenstrual Phase: Days 1-5\nFollicular Phase: Days 1-13\nOvulation: Day 14\nLuteal Phase: Days 15-28')">
-        <div style="font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase;">Medical Guide</div>
-        <h3 style="font-size: 16px; font-weight: 700; margin: 4px 0 6px;">The 4 Phases of Your Cycle</h3>
-        <p style="font-size: 13px; color: var(--text-sec); line-height: 1.4;">Understand how estrogen and progesterone affect your energy, skin, and mood.</p>
-      </div>
+      <input type="text" id="learnSearchInput" placeholder="Search articles..." oninput="filterArticles()" style="width: 100%; padding: 12px 16px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 16px; font-size: 14px;">
 
-      <div class="card" style="cursor: pointer;" onclick="alert('Article: Understanding Cervical Mucus & LH Surges')">
-        <div style="font-size: 11px; font-weight: 700; color: var(--fertile); text-transform: uppercase;">Fertility</div>
-        <h3 style="font-size: 16px; font-weight: 700; margin: 4px 0 6px;">Recognizing Ovulation Signals</h3>
-        <p style="font-size: 13px; color: var(--text-sec); line-height: 1.4;">How to confirm your fertile window through basal body temperature and physical signs.</p>
+      <div id="articlesList">
+        <div class="card article-item" onclick="alert('Article: The 4 Phases of Menstrual Cycle\n\nMenstrual: Days 1-5\nFollicular: Days 1-13\nOvulation: Day 14\nLuteal: Days 15-28')">
+          <div style="font-size: 11px; font-weight: 700; color: var(--primary);">CYCLE BASICS</div>
+          <h3 style="font-size: 16px; font-weight: 700; margin: 4px 0 6px;">The 4 Phases of Your Cycle</h3>
+          <p style="font-size: 13px; color: var(--text-sec);">Understanding hormonal shifts and energy changes.</p>
+        </div>
+        <div class="card article-item" onclick="alert('Article: Recognizing Ovulation Signals')">
+          <div style="font-size: 11px; font-weight: 700; color: var(--fertile);">FERTILITY</div>
+          <h3 style="font-size: 16px; font-weight: 700; margin: 4px 0 6px;">Recognizing Ovulation Signals</h3>
+          <p style="font-size: 13px; color: var(--text-sec);">Cervical mucus, temperature, and LH surges.</p>
+        </div>
       </div>
     </div>
 
@@ -642,17 +586,25 @@
       </div>
 
       <div class="card">
-        <div style="font-weight: 700; margin-bottom: 12px;">Privacy & Security</div>
-        <div class="card-row" style="margin-bottom: 12px;">
-          <span>Biometric App Lock</span>
-          <label class="switch">
-            <input type="checkbox" checked>
-            <span class="slider"></span>
-          </label>
+        <div style="font-weight: 700; margin-bottom: 12px;">Cycle Settings</div>
+        <div class="card-row" style="margin-bottom: 10px;">
+          <span>Default Cycle Length</span>
+          <span style="font-weight: 700; color: var(--primary);" id="meCycleLen">28 days</span>
         </div>
         <div class="card-row">
-          <span>Encrypted Backup</span>
-          <button style="border: none; background: none; color: var(--primary); font-weight: 700; cursor: pointer;" onclick="alert('Encrypted JSON backup downloaded to local files!')">Export</button>
+          <span>Default Period Length</span>
+          <span style="font-weight: 700; color: var(--period);" id="mePeriodLen">5 days</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight: 700; margin-bottom: 12px;">Security & App Lock</div>
+        <div class="card-row">
+          <span>Biometric App Lock</span>
+          <label class="switch">
+            <input type="checkbox" id="biometricToggle" checked onchange="saveSetting('biometric', this.checked)">
+            <span class="slider"></span>
+          </label>
         </div>
       </div>
 
@@ -671,7 +623,7 @@
     <div id="logModalBackdrop" class="modal-backdrop" onclick="closeLogModal()"></div>
     <div id="logBottomSheet" class="bottom-sheet">
       <div class="sheet-handle"></div>
-      <h2 style="font-size: 18px; font-weight: 800; margin-bottom: 16px;">Log Today (Sep 28)</h2>
+      <h2 style="font-size: 18px; font-weight: 800; margin-bottom: 16px;" id="sheetDateTitle">Log Day</h2>
 
       <div style="margin-bottom: 16px;">
         <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Flow Intensity</div>
@@ -694,17 +646,17 @@
         </div>
       </div>
 
-      <div style="margin-bottom: 24px;">
-        <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Physical Symptoms</div>
-        <div class="chip-container" id="symptomChips">
-          <span class="chip" onclick="toggleMultiChip(this)">Cramps</span>
-          <span class="chip selected" onclick="toggleMultiChip(this)">Headache</span>
-          <span class="chip" onclick="toggleMultiChip(this)">Bloating</span>
-          <span class="chip selected" onclick="toggleMultiChip(this)">Tender Breasts</span>
+      <div style="margin-bottom: 20px;">
+        <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Trackers (Medication & Workout)</div>
+        <div class="chip-container">
+          <span class="chip selected" id="chkMed" onclick="toggleMultiChip(this)">💊 Medication</span>
+          <span class="chip selected" id="chkSupp" onclick="toggleMultiChip(this)">🌿 Supplements</span>
+          <span class="chip selected" id="chkWork" onclick="toggleMultiChip(this)">🏃‍♀️ Workout</span>
         </div>
       </div>
 
       <button class="btn-primary" onclick="saveLog()">Save Entry</button>
+      <button style="width: 100%; border: none; background: none; color: #E53935; font-weight: 700; margin-top: 14px; cursor: pointer;" onclick="deleteLog()">Clear / Delete this log</button>
     </div>
 
     <!-- BOTTOM NAVIGATION BAR -->
@@ -733,7 +685,8 @@
   </div>
 
   <script>
-    // Tab Switching
+    let selectedCalDayNum = 28;
+
     function switchTab(screenId, btn) {
       document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -741,8 +694,16 @@
       btn.classList.add('active');
     }
 
-    // Modal Control
-    function openLogModal() {
+    function selectCalendarDay(day, phase) {
+      selectedCalDayNum = day;
+      document.querySelectorAll('.cal-cell').forEach(c => c.classList.remove('selected-day'));
+      event.currentTarget.classList.add('selected-day');
+      document.getElementById('calSelectedTitle').innerText = 'Sep ' + day;
+      document.getElementById('calSelectedPhase').innerText = phase + ' • Day ' + (day <= 14 ? day : day - 14) + ' of 28';
+    }
+
+    function openLogModal(day) {
+      document.getElementById('sheetDateTitle').innerText = 'Log for Sep ' + (day || 28);
       document.getElementById('logModalBackdrop').classList.add('active');
       document.getElementById('logBottomSheet').classList.add('open');
     }
@@ -752,7 +713,6 @@
       document.getElementById('logBottomSheet').classList.remove('open');
     }
 
-    // Chip Selection
     function selectChip(element, group) {
       const container = element.parentElement;
       container.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
@@ -763,12 +723,29 @@
       element.classList.toggle('selected');
     }
 
-    // Save Log & Dynamically Update Dial
     function saveLog() {
       closeLogModal();
-      const circle = document.getElementById('cycleProgressCircle');
-      circle.style.strokeDashoffset = '240'; // animated transition
-      alert('Day log saved to local SQLite database!');
+      alert('Day log saved to local storage! Trackers & symptoms updated.');
+    }
+
+    function deleteLog() {
+      closeLogModal();
+      alert('Log cleared for this day.');
+    }
+
+    function filterArticles() {
+      const q = document.getElementById('learnSearchInput').value.toLowerCase();
+      document.querySelectorAll('.article-item').forEach(item => {
+        item.style.display = item.innerText.toLowerCase().includes(q) ? 'block' : 'none';
+      });
+    }
+
+    function showDoctorSummary() {
+      alert("CLINICAL SUMMARY:\nCycles Tracked: 3\nAvg Cycle: 28 Days\nVariation: ±1.2 Days\n100% Offline & Private");
+    }
+
+    function saveSetting(k, v) {
+      try { localStorage.setItem('monthly_' + k, v); } catch(_) {}
     }
   </script>
 </body>

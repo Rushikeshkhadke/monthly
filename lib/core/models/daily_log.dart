@@ -36,6 +36,9 @@ class DailyLog {
   final int painLevel; // 0 to 5
   final int energyLevel; // 0 to 5
   final List<String> symptoms;
+  final bool medication;
+  final bool supplements;
+  final bool workout;
   final String? notes;
 
   const DailyLog({
@@ -46,6 +49,9 @@ class DailyLog {
     this.painLevel = 0,
     this.energyLevel = 3,
     this.symptoms = const [],
+    this.medication = false,
+    this.supplements = false,
+    this.workout = false,
     this.notes,
   });
 
@@ -57,6 +63,9 @@ class DailyLog {
     int? painLevel,
     int? energyLevel,
     List<String>? symptoms,
+    bool? medication,
+    bool? supplements,
+    bool? workout,
     String? notes,
   }) {
     return DailyLog(
@@ -67,6 +76,9 @@ class DailyLog {
       painLevel: painLevel ?? this.painLevel,
       energyLevel: energyLevel ?? this.energyLevel,
       symptoms: symptoms ?? this.symptoms,
+      medication: medication ?? this.medication,
+      supplements: supplements ?? this.supplements,
+      workout: workout ?? this.workout,
       notes: notes ?? this.notes,
     );
   }
@@ -79,6 +91,9 @@ class DailyLog {
       'mood': mood?.name,
       'pain_level': painLevel,
       'energy_level': energyLevel,
+      'medication': medication ? 1 : 0,
+      'supplements': supplements ? 1 : 0,
+      'workout': workout ? 1 : 0,
       'notes': notes,
     };
   }
@@ -92,6 +107,9 @@ class DailyLog {
       painLevel: map['pain_level'] as int? ?? 0,
       energyLevel: map['energy_level'] as int? ?? 3,
       symptoms: symptoms,
+      medication: (map['medication'] as int? ?? 0) == 1,
+      supplements: (map['supplements'] as int? ?? 0) == 1,
+      workout: (map['workout'] as int? ?? 0) == 1,
       notes: map['notes'] as String?,
     );
   }

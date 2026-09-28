@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:monthly/core/models/cycle.dart';
+import 'package:monthly/core/models/daily_log.dart';
 import 'package:monthly/core/math/cycle_predictor.dart';
 
 void main() {
@@ -37,7 +38,7 @@ void main() {
       expect(prediction.fertileWindowEnd, equals(prediction.ovulationDate.add(const Duration(days: 1))));
     });
 
-    test('Detects correct cycle phases (Menstrual, Fertile, Ovulation, Luteal)', () {
+    test('Detects correct cycle phases (Menstrual, Fertile, Ovulation, Luteal, Late)', () {
       final start = DateTime(2026, 9, 1);
       final prediction = CyclePredictor.predictNextCycle(
         historicalCycles: [
@@ -64,6 +65,42 @@ void main() {
       );
       expect(ovulationStatus.phase, equals(CyclePhase.ovulation));
       expect(ovulationStatus.chanceOfConception, contains('Peak'));
+
+      // Day 35 should be Late / Overdue
+      final day35Status = CyclePredictor.getDayStatus(
+        targetDate: start.add(const Duration(days: 34)),
+        currentCycleStartDate: start,
+        prediction: prediction,
+      );
+      expect(day35Status.phase, equals(CyclePhase.late));
+      expect(day35Status.phase.displayName, contains('overdue'));
+    });
+
+    test('DailyLog preserves trackers (medication, supplements, workout)', () {
+      final log = DailyLog(
+        logDate: DateTime(2026, 9, 28),
+        flow: FlowIntensity.medium,
+        mood: MoodType.calm,
+        painLevel: 2,
+        energyLevel: 4,
+        medication: true,
+        supplements: true,
+        workout: true,
+        symptoms: ['Cramps', 'Headache'],
+        notes: 'Felt good after pilates',
+      );
+
+      final map = log.toMap();
+      expect(map['medication'], equals(1));
+      expect(map['supplements'], equals(1));
+      expect(map['workout'], equals(1));
+
+      final restored = DailyLog.fromMap(map, symptoms: ['Cramps', 'Headache']);
+      expect(restored.medication, isTrue);
+      expect(restored.supplements, isTrue);
+      expect(restored.workout, isTrue);
+      expect(restored.painLevel, equals(2));
+      expect(restored.energyLevel, equals(4));
     });
   });
 }
