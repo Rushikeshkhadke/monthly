@@ -64,10 +64,35 @@ class CyclesNotifier extends StateNotifier<List<Cycle>> {
     await AppDatabase.instance.insertCycle(cycle);
     await _load();
   }
+
+  Future<void> refresh() async => await _load();
 }
 
 final cyclesProvider = StateNotifierProvider<CyclesNotifier, List<Cycle>>((ref) {
   return CyclesNotifier();
+});
+
+// Daily Logs Provider (Date string 'YYYY-MM-DD' -> DailyLog)
+class DailyLogsNotifier extends StateNotifier<Map<String, DailyLog>> {
+  DailyLogsNotifier() : super({}) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final logs = await AppDatabase.instance.getAllDailyLogs();
+    final map = <String, DailyLog>{};
+    for (final l in logs) {
+      final key = l.logDate.toIso8601String().split('T').first;
+      map[key] = l;
+    }
+    state = map;
+  }
+
+  Future<void> refresh() async => await _load();
+}
+
+final dailyLogsProvider = StateNotifierProvider<DailyLogsNotifier, Map<String, DailyLog>>((ref) {
+  return DailyLogsNotifier();
 });
 
 // Statistical Prediction Provider
@@ -95,12 +120,4 @@ final todayStatusProvider = Provider<DayStatus>((ref) {
     currentCycleStartDate: lastCycleStart,
     prediction: prediction,
   );
-});
-
-// Selected Date Provider for Calendar / Log
-final selectedDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
-
-// Today's Daily Log Provider
-final dailyLogForDateProvider = FutureProvider.family<DailyLog?, DateTime>((ref, date) async {
-  return await AppDatabase.instance.getDailyLog(date);
 });

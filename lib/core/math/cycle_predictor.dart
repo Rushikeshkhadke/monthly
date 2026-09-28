@@ -1,5 +1,6 @@
 import 'dart:math';
 import '../models/cycle.dart';
+import '../models/daily_log.dart';
 
 enum CyclePhase {
   menstrual,
@@ -59,7 +60,7 @@ class PredictionResult {
   final int predictedCycleLength;
   final int predictedPeriodLength;
   final int confidencePercent;
-  final double cycleVariation; // standard deviation in days
+  final double cycleVariation;
 
   const PredictionResult({
     required this.nextPeriodStartDate,
@@ -108,19 +109,16 @@ class CyclePredictor {
   }
 
   /// Calculates statistical prediction for the next cycle based on historical cycles
-  /// and user baseline settings.
   static PredictionResult predictNextCycle({
     required List<Cycle> historicalCycles,
     required int defaultCycleLength,
     required int defaultPeriodLength,
     int lutealPhaseLength = 14,
   }) {
-    // Filter valid recorded past cycles (non-predicted with a cycle length)
     final validCycles = historicalCycles
         .where((c) => !c.isPredicted && c.cycleLength != null && c.cycleLength! >= 15 && c.cycleLength! <= 60)
         .toList();
 
-    // Sort chronologically ascending
     validCycles.sort((a, b) => a.startDate.compareTo(b.startDate));
 
     int predictedCycleLength;
@@ -128,20 +126,17 @@ class CyclePredictor {
     double stdDev = 0.0;
 
     if (validCycles.length >= 3) {
-      // 1. Weighted Moving Average (most recent cycles have higher weights: 3, 2, 1)
       final n = validCycles.length;
       final c1 = validCycles[n - 1].cycleLength!;
       final c2 = validCycles[n - 2].cycleLength!;
       final c3 = validCycles[n - 3].cycleLength!;
       predictedCycleLength = ((3 * c1 + 2 * c2 + 1 * c3) / 6.0).round();
 
-      // Standard deviation of historical cycles
       final lengths = validCycles.map((c) => c.cycleLength!.toDouble()).toList();
       final mean = lengths.reduce((a, b) => a + b) / lengths.length;
       final variance = lengths.map((x) => pow(x - mean, 2)).reduce((a, b) => a + b) / lengths.length;
       stdDev = sqrt(variance);
 
-      // Period duration average
       final validPeriods = validCycles.where((c) => c.periodLength != null && c.periodLength! > 0).map((c) => c.periodLength!).toList();
       if (validPeriods.isNotEmpty) {
         final lastFewPeriods = validPeriods.length > 3 ? validPeriods.sublist(validPeriods.length - 3) : validPeriods;
@@ -150,19 +145,16 @@ class CyclePredictor {
         predictedPeriodLength = defaultPeriodLength;
       }
     } else if (validCycles.isNotEmpty) {
-      // Simple average when fewer than 3 recorded cycles
       final total = validCycles.map((c) => c.cycleLength!).reduce((a, b) => a + b);
       predictedCycleLength = (total / validCycles.length).round();
       predictedPeriodLength = defaultPeriodLength;
       stdDev = 1.5;
     } else {
-      // Fallback to baseline settings
       predictedCycleLength = defaultCycleLength;
       predictedPeriodLength = defaultPeriodLength;
       stdDev = 2.0;
     }
 
-    // Determine the reference start date (last recorded cycle or today)
     final rawStartDate = validCycles.isNotEmpty ? validCycles.last.startDate : DateTime.now();
     final lastStartDate = normalizeDate(rawStartDate);
 
@@ -176,7 +168,6 @@ class CyclePredictor {
     final fertileStart = ovulationDate.subtract(const Duration(days: 5));
     final fertileEnd = ovulationDate.add(const Duration(days: 1));
 
-    // Confidence score: 95% baseline minus penalties for variance
     int confidence = (95 - (stdDev * 5)).round();
     if (confidence < 60) confidence = 60;
     if (confidence > 95) confidence = 95;
@@ -194,7 +185,7 @@ class CyclePredictor {
     );
   }
 
-  /// Calculates the day status (e.g. Day 14, phase, conception chance) for a specific target date
+  /// Calculates the day status for a specific target date
   static DayStatus getDayStatus({
     required DateTime targetDate,
     required DateTime currentCycleStartDate,
@@ -204,7 +195,7 @@ class CyclePredictor {
     final target = normalizeDate(targetDate);
     final diff = target.difference(start).inDays;
 
-    final cycleDay = diff + 1; // 1-indexed (Day 1, Day 2...)
+    final cycleDay = diff + 1;
     final totalCycleDays = prediction.predictedCycleLength;
     final daysUntilNext = totalCycleDays - cycleDay;
 
@@ -242,15 +233,25 @@ class CyclePredictor {
     );
   }
 
-  /// Determines the visual phase of any given calendar date based on recorded cycles and predictions
+  /// Determines the visual phase of any given calendar date based on recorded cycles, logs and predictions
   static CyclePhase getCalendarDatePhase({
     required DateTime date,
     required List<Cycle> cycles,
     required PredictionResult prediction,
+    Map<String, DailyLog>? dailyLogs,
   }) {
     final target = normalizeDate(date);
+    final dateStr = target.toIso8601String().split('T').first;
 
-    // 1. Check if it falls within any actual recorded past period bleed
+    // 1. If user explicitly logged period flow on this exact day, mark as period!
+    if (dailyLogs != null && dailyLogs.containsKey(dateStr)) {
+      final log = dailyLogs[dateStr]!;
+      if (log.flow != FlowIntensity.none) {
+        return CyclePhase.menstrual;
+      }
+    }
+
+    // 2. Check recorded cycles
     for (final cycle in cycles) {
       final start = normalizeDate(cycle.startDate);
       final periodLength = cycle.periodLength ?? prediction.predictedPeriodLength;
@@ -260,12 +261,7 @@ class CyclePredictor {
       }
     }
 
-    // 2. Check if it falls in the upcoming predicted period
-    if (isDateInRange(target, prediction.nextPeriodStartDate, prediction.nextPeriodEndDate)) {
-      return CyclePhase.predictedPeriod;
-    }
-
-    // 3. Check ovulation day
+    // 3. Check ovulation day FIRST so it gets the yellow dot (not overridden by fertile window)
     if (isSameDay(target, prediction.ovulationDate)) {
       return CyclePhase.ovulation;
     }
@@ -273,6 +269,11 @@ class CyclePredictor {
     // 4. Check fertile window
     if (isDateInRange(target, prediction.fertileWindowStart, prediction.fertileWindowEnd)) {
       return CyclePhase.fertile;
+    }
+
+    // 5. Check predicted upcoming period
+    if (isDateInRange(target, prediction.nextPeriodStartDate, prediction.nextPeriodEndDate)) {
+      return CyclePhase.predictedPeriod;
     }
 
     return CyclePhase.none;

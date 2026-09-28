@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/models/cycle.dart';
+import '../../core/models/daily_log.dart';
 import '../../core/math/cycle_predictor.dart';
 import '../../core/providers/cycle_providers.dart';
 import '../logging/widgets/log_day_sheet.dart';
@@ -22,6 +23,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget build(BuildContext context) {
     final prediction = ref.watch(predictionProvider);
     final cycles = ref.watch(cyclesProvider);
+    final dailyLogs = ref.watch(dailyLogsProvider);
 
     // Compute status for the selected date dynamically
     final lastCycleStart = cycles.isNotEmpty
@@ -37,7 +39,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final monthTitle = DateFormat('MMMM yyyy').format(_focusedMonth);
 
     void refreshCalendar() {
-      ref.invalidate(cyclesProvider);
+      ref.read(dailyLogsProvider.notifier).refresh();
+      ref.read(cyclesProvider.notifier).refresh();
       ref.invalidate(todayStatusProvider);
       ref.invalidate(predictionProvider);
       setState(() {});
@@ -113,7 +116,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         ),
                         const SizedBox(height: 12),
                         // Days grid
-                        _buildDaysGrid(cycles, prediction),
+                        _buildDaysGrid(cycles, prediction, dailyLogs),
                       ],
                     ),
                   ),
@@ -233,7 +236,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Widget _buildDaysGrid(List<Cycle> cycles, PredictionResult prediction) {
+  Widget _buildDaysGrid(
+    List<Cycle> cycles,
+    PredictionResult prediction,
+    Map<String, dynamic> dailyLogs,
+  ) {
     final year = _focusedMonth.year;
     final month = _focusedMonth.month;
     final firstDay = DateTime(year, month, 1);
@@ -256,6 +263,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         date: date,
         cycles: cycles,
         prediction: prediction,
+        dailyLogs: dailyLogs.cast<String, DailyLog>(),
       );
 
       Color? circleColor;

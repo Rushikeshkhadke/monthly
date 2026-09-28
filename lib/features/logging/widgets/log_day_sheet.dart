@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/models/cycle.dart';
 import '../../../core/models/daily_log.dart';
 
 class LogDaySheet extends StatefulWidget {
@@ -101,6 +102,31 @@ class _LogDaySheetState extends State<LogDaySheet> {
     );
 
     await AppDatabase.instance.saveDailyLog(dailyLog);
+
+    if (_flow != FlowIntensity.none) {
+      final cycles = await AppDatabase.instance.getAllCycles();
+      final targetDate = DateTime(widget.date.year, widget.date.month, widget.date.day);
+      bool cycleExistsNear = false;
+      for (final c in cycles) {
+        final start = DateTime(c.startDate.year, c.startDate.month, c.startDate.day);
+        final diff = targetDate.difference(start).inDays.abs();
+        if (diff <= 10) {
+          cycleExistsNear = true;
+          break;
+        }
+      }
+      if (!cycleExistsNear) {
+        final settings = await AppDatabase.instance.getSettings();
+        await AppDatabase.instance.insertCycle(
+          Cycle(
+            startDate: targetDate,
+            periodLength: settings.defaultPeriodLength,
+            cycleLength: settings.defaultCycleLength,
+          ),
+        );
+      }
+    }
+
     if (mounted) {
       Navigator.of(context).pop();
       widget.onSaved?.call();
