@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../app/theme/app_colors.dart';
+import '../../core/models/cycle.dart';
+import '../../core/math/cycle_predictor.dart';
 import '../../core/providers/cycle_providers.dart';
 import '../logging/widgets/log_day_sheet.dart';
 
@@ -19,6 +21,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final prediction = ref.watch(predictionProvider);
+    final cycles = ref.watch(cyclesProvider);
     final dayStatus = ref.watch(todayStatusProvider);
 
     final monthTitle = DateFormat('MMMM yyyy').format(_focusedMonth);
@@ -89,7 +92,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         ),
                         const SizedBox(height: 12),
                         // Days grid
-                        _buildDaysGrid(prediction),
+                        _buildDaysGrid(cycles, prediction),
                       ],
                     ),
                   ),
@@ -175,7 +178,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Widget _buildDaysGrid(dynamic prediction) {
+  Widget _buildDaysGrid(List<Cycle> cycles, PredictionResult prediction) {
     final year = _focusedMonth.year;
     final month = _focusedMonth.month;
     final firstDay = DateTime(year, month, 1);
@@ -194,23 +197,37 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       final date = DateTime(year, month, day);
       final isSelected = date.year == _selectedDate.year && date.month == _selectedDate.month && date.day == _selectedDate.day;
 
-      // Determine day color style based on day of month for mock demo
+      final phase = CyclePredictor.getCalendarDatePhase(
+        date: date,
+        cycles: cycles,
+        prediction: prediction,
+      );
+
       Color? circleColor;
       Color textColor = AppColors.textPrimary;
       bool isBorder = false;
 
-      if (day >= 6 && day <= 9) {
-        circleColor = AppColors.period;
-        textColor = Colors.white;
-      } else if (day >= 15 && day <= 20) {
-        circleColor = AppColors.fertile;
-        textColor = Colors.white;
-      } else if (day == 18) {
-        circleColor = AppColors.ovulation;
-        textColor = Colors.white;
-      } else if (day >= 26 && day <= 28) {
-        isBorder = true;
-        circleColor = AppColors.predicted;
+      switch (phase) {
+        case CyclePhase.menstrual:
+          circleColor = AppColors.period;
+          textColor = Colors.white;
+          break;
+        case CyclePhase.fertile:
+          circleColor = AppColors.fertile;
+          textColor = Colors.white;
+          break;
+        case CyclePhase.ovulation:
+          circleColor = AppColors.ovulation;
+          textColor = Colors.white;
+          break;
+        case CyclePhase.predictedPeriod:
+          circleColor = AppColors.predicted;
+          isBorder = true;
+          break;
+        default:
+          circleColor = null;
+          textColor = AppColors.textPrimary;
+          break;
       }
 
       dayWidgets.add(

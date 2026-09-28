@@ -6,7 +6,9 @@ enum CyclePhase {
   follicular,
   fertile,
   ovulation,
-  luteal;
+  luteal,
+  predictedPeriod,
+  none;
 
   String get displayName {
     switch (this) {
@@ -20,6 +22,10 @@ enum CyclePhase {
         return 'Ovulation day';
       case CyclePhase.luteal:
         return 'Luteal phase';
+      case CyclePhase.predictedPeriod:
+        return 'Predicted period';
+      case CyclePhase.none:
+        return 'Cycle day';
     }
   }
 
@@ -33,6 +39,8 @@ enum CyclePhase {
         return 'Low chance of conception';
       case CyclePhase.menstrual:
       case CyclePhase.luteal:
+      case CyclePhase.predictedPeriod:
+      case CyclePhase.none:
         return 'Very low chance of conception';
     }
   }
@@ -79,6 +87,22 @@ class DayStatus {
 }
 
 class CyclePredictor {
+  /// Normalizes a DateTime to local midnight (00:00:00.000)
+  static DateTime normalizeDate(DateTime dt) {
+    return DateTime(dt.year, dt.month, dt.day);
+  }
+
+  static bool isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  static bool isDateInRange(DateTime target, DateTime start, DateTime end) {
+    final t = normalizeDate(target);
+    final s = normalizeDate(start);
+    final e = normalizeDate(end);
+    return !t.isBefore(s) && !t.isAfter(e);
+  }
+
   /// Calculates statistical prediction for the next cycle based on historical cycles
   /// and user baseline settings.
   static PredictionResult predictNextCycle({
@@ -135,7 +159,8 @@ class CyclePredictor {
     }
 
     // Determine the reference start date (last recorded cycle or today)
-    final lastStartDate = validCycles.isNotEmpty ? validCycles.last.startDate : DateTime.now();
+    final rawStartDate = validCycles.isNotEmpty ? validCycles.last.startDate : DateTime.now();
+    final lastStartDate = normalizeDate(rawStartDate);
 
     final nextPeriodStart = lastStartDate.add(Duration(days: predictedCycleLength));
     final nextPeriodEnd = nextPeriodStart.add(Duration(days: max(1, predictedPeriodLength - 1)));
@@ -171,8 +196,8 @@ class CyclePredictor {
     required DateTime currentCycleStartDate,
     required PredictionResult prediction,
   }) {
-    final start = DateTime(currentCycleStartDate.year, currentCycleStartDate.month, currentCycleStartDate.day);
-    final target = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    final start = normalizeDate(currentCycleStartDate);
+    final target = normalizeDate(targetDate);
     final diff = target.difference(start).inDays;
 
     final cycleDay = diff + 1; // 1-indexed (Day 1, Day 2...)
@@ -180,16 +205,20 @@ class CyclePredictor {
     final daysUntilNext = totalCycleDays - cycleDay;
 
     CyclePhase phase;
-    if (cycleDay <= prediction.predictedPeriodLength) {
+    if (cycleDay >= 1 && cycleDay <= prediction.predictedPeriodLength) {
       phase = CyclePhase.menstrual;
     } else {
-      final ovulation = DateTime(prediction.ovulationDate.year, prediction.ovulationDate.month, prediction.ovulationDate.day);
-      final fertileStart = DateTime(prediction.fertileWindowStart.year, prediction.fertileWindowStart.month, prediction.fertileWindowStart.day);
-      final fertileEnd = DateTime(prediction.fertileWindowEnd.year, prediction.fertileWindowEnd.month, prediction.fertileWindowEnd.day);
+      final ovulation = normalizeDate(prediction.ovulationDate);
+      final fertileStart = normalizeDate(prediction.fertileWindowStart);
+      final fertileEnd = normalizeDate(prediction.fertileWindowEnd);
+      final nextStart = normalizeDate(prediction.nextPeriodStartDate);
+      final nextEnd = normalizeDate(prediction.nextPeriodEndDate);
 
-      if (target.isAtSameMomentAs(ovulation)) {
+      if (isDateInRange(target, nextStart, nextEnd)) {
+        phase = CyclePhase.predictedPeriod;
+      } else if (isSameDay(target, ovulation)) {
         phase = CyclePhase.ovulation;
-      } else if (!target.isBefore(fertileStart) && !target.isAfter(fertileEnd)) {
+      } else if (isDateInRange(target, fertileStart, fertileEnd)) {
         phase = CyclePhase.fertile;
       } else if (target.isBefore(fertileStart)) {
         phase = CyclePhase.follicular;
@@ -205,5 +234,41 @@ class CyclePredictor {
       chanceOfConception: phase.chanceOfConception,
       daysUntilNextPeriod: max(0, daysUntilNext),
     );
+  }
+
+  /// Determines the visual phase of any given calendar date based on recorded cycles and predictions
+  static CyclePhase getCalendarDatePhase({
+    required DateTime date,
+    required List<Cycle> cycles,
+    required PredictionResult prediction,
+  }) {
+    final target = normalizeDate(date);
+
+    // 1. Check if it falls within any actual recorded past period bleed
+    for (final cycle in cycles) {
+      final start = normalizeDate(cycle.startDate);
+      final periodLength = cycle.periodLength ?? prediction.predictedPeriodLength;
+      final end = start.add(Duration(days: max(1, periodLength - 1)));
+      if (isDateInRange(target, start, end)) {
+        return CyclePhase.menstrual;
+      }
+    }
+
+    // 2. Check if it falls in the upcoming predicted period
+    if (isDateInRange(target, prediction.nextPeriodStartDate, prediction.nextPeriodEndDate)) {
+      return CyclePhase.predictedPeriod;
+    }
+
+    // 3. Check ovulation day
+    if (isSameDay(target, prediction.ovulationDate)) {
+      return CyclePhase.ovulation;
+    }
+
+    // 4. Check fertile window
+    if (isDateInRange(target, prediction.fertileWindowStart, prediction.fertileWindowEnd)) {
+      return CyclePhase.fertile;
+    }
+
+    return CyclePhase.none;
   }
 }

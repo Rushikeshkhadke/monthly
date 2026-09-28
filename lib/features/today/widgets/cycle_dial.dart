@@ -76,12 +76,15 @@ class CycleDial extends StatelessWidget {
     switch (phase) {
       case CyclePhase.menstrual:
         return AppColors.period;
+      case CyclePhase.predictedPeriod:
+        return AppColors.predicted;
       case CyclePhase.fertile:
         return AppColors.fertile;
       case CyclePhase.ovulation:
         return AppColors.ovulation;
       case CyclePhase.follicular:
       case CyclePhase.luteal:
+      case CyclePhase.none:
         return AppColors.primary;
     }
   }

@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
+import '../../core/providers/cycle_providers.dart';
 
-class InsightsScreen extends StatefulWidget {
+class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
   @override
-  State<InsightsScreen> createState() => _InsightsScreenState();
+  ConsumerState<InsightsScreen> createState() => _InsightsScreenState();
 }
 
-class _InsightsScreenState extends State<InsightsScreen> {
+class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   int _selectedRangeIndex = 0;
   final List<String> _ranges = ['3 months', '6 months', '1 year'];
 
   @override
   Widget build(BuildContext context) {
+    final prediction = ref.watch(predictionProvider);
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -81,13 +84,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 children: [
                   const Text('Cycle length (days)', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   const SizedBox(height: 4),
-                  const Row(
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Text('28', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                      SizedBox(width: 6),
-                      Text('Average', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      Text('${prediction.predictedCycleLength}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                      const SizedBox(width: 6),
+                      const Text('Average', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -127,14 +130,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppColors.divider, width: 0.8),
                     ),
-                    child: const Column(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Period length', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                        SizedBox(height: 6),
-                        Text('5', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                        SizedBox(height: 2),
-                        Text('Average days', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                        const Text('Period length', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        const SizedBox(height: 6),
+                        Text('${prediction.predictedPeriodLength}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                        const Text('Average days', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                       ],
                     ),
                   ),
@@ -148,14 +151,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppColors.divider, width: 0.8),
                     ),
-                    child: const Column(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Cycle variation', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                        SizedBox(height: 6),
-                        Text('±3', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                        SizedBox(height: 2),
-                        Text('Days', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                        const Text('Cycle variation', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        const SizedBox(height: 6),
+                        Text('±${prediction.cycleVariation}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                        const Text('Days', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                       ],
                     ),
                   ),

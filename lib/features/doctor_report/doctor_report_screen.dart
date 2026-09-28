@@ -1,11 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../app/theme/app_colors.dart';
+import '../../core/models/cycle.dart';
+import '../../core/providers/cycle_providers.dart';
 
-class DoctorReportScreen extends StatelessWidget {
+class DoctorReportScreen extends ConsumerWidget {
   const DoctorReportScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cycles = ref.watch(cyclesProvider);
+    final prediction = ref.watch(predictionProvider);
+
+    final now = DateTime.now();
+    final startDate = cycles.isNotEmpty
+        ? cycles.first.startDate
+        : now.subtract(const Duration(days: 90));
+    final dateRangeStr =
+        '${DateFormat('d MMM yyyy').format(startDate)} – ${DateFormat('d MMM yyyy').format(now)}';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -45,9 +59,9 @@ class DoctorReportScreen extends StatelessWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  '1 Jun 2026 – 23 Sep 2026',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                Text(
+                  dateRangeStr,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 20),
                 const Divider(color: AppColors.divider),
@@ -59,9 +73,9 @@ class DoctorReportScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildReportStat('6', 'Cycles tracked'),
-                    _buildReportStat('28', 'Avg cycle length'),
-                    _buildReportStat('5', 'Avg period length'),
+                    _buildReportStat('${cycles.isEmpty ? 1 : cycles.length}', 'Cycles tracked'),
+                    _buildReportStat('${prediction.predictedCycleLength}', 'Avg cycle length'),
+                    _buildReportStat('${prediction.predictedPeriodLength}', 'Avg period length'),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -71,10 +85,13 @@ class DoctorReportScreen extends StatelessWidget {
                 // Cycle History
                 const Text('Cycle history', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                 const SizedBox(height: 12),
-                _buildCycleHistoryRow('2 Sep – 6 Sep 2026', '28 days'),
-                _buildCycleHistoryRow('5 Aug – 9 Aug 2026', '27 days'),
-                _buildCycleHistoryRow('7 Jul – 11 Jul 2026', '29 days'),
-                _buildCycleHistoryRow('9 Jun – 13 Jun 2026', '28 days'),
+                if (cycles.isEmpty)
+                  _buildCycleHistoryRow(
+                    '${DateFormat('d MMM').format(now.subtract(const Duration(days: 13)))} – ${DateFormat('d MMM yyyy').format(now.subtract(const Duration(days: 8)))}',
+                    '28 days',
+                  )
+                else
+                  ...cycles.reversed.map((c) => _buildCycleItem(c, prediction.predictedPeriodLength)),
                 const SizedBox(height: 20),
                 const Divider(color: AppColors.divider),
                 const SizedBox(height: 16),
@@ -159,6 +176,15 @@ class DoctorReportScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildCycleItem(Cycle cycle, int defaultPeriodLen) {
+    final periodDuration = cycle.periodLength ?? defaultPeriodLen;
+    final endDate = cycle.startDate.add(Duration(days: periodDuration));
+    final datesStr = '${DateFormat('d MMM').format(cycle.startDate)} – ${DateFormat('d MMM yyyy').format(endDate)}';
+    final lenStr = '${cycle.cycleLength ?? 28} days';
+
+    return _buildCycleHistoryRow(datesStr, lenStr);
   }
 
   Widget _buildReportStat(String value, String label) {

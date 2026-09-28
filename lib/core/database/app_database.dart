@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/cycle.dart';
@@ -7,6 +8,17 @@ import '../models/user_settings.dart';
 class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
+
+  // In-memory mock storage for Web preview
+  UserSettings _webSettings = const UserSettings(onboardingCompleted: false);
+  final List<Cycle> _webCycles = [
+    Cycle(
+      startDate: DateTime.now().subtract(const Duration(days: 13)),
+      periodLength: 5,
+      cycleLength: 28,
+    ),
+  ];
+  final Map<String, DailyLog> _webLogs = {};
 
   AppDatabase._init();
 
@@ -23,6 +35,9 @@ class AppDatabase {
     return await openDatabase(
       path,
       version: 1,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON;');
+      },
       onCreate: _createDB,
     );
   }
@@ -107,6 +122,8 @@ class AppDatabase {
 
   // --- User Settings Methods ---
   Future<UserSettings> getSettings() async {
+    if (kIsWeb) return _webSettings;
+
     final db = await instance.database;
     final maps = await db.query('user_settings', limit: 1);
     if (maps.isNotEmpty) {
@@ -116,6 +133,11 @@ class AppDatabase {
   }
 
   Future<int> updateSettings(UserSettings settings) async {
+    if (kIsWeb) {
+      _webSettings = settings;
+      return 1;
+    }
+
     final db = await instance.database;
     return await db.update(
       'user_settings',
@@ -127,12 +149,19 @@ class AppDatabase {
 
   // --- Cycles Methods ---
   Future<List<Cycle>> getAllCycles() async {
+    if (kIsWeb) return List.unmodifiable(_webCycles);
+
     final db = await instance.database;
     final maps = await db.query('cycles', orderBy: 'start_date ASC');
     return maps.map((m) => Cycle.fromMap(m)).toList();
   }
 
   Future<int> insertCycle(Cycle cycle) async {
+    if (kIsWeb) {
+      _webCycles.add(cycle);
+      return _webCycles.length;
+    }
+
     final db = await instance.database;
     return await db.insert(
       'cycles',
@@ -143,8 +172,10 @@ class AppDatabase {
 
   // --- Daily Log Methods ---
   Future<DailyLog?> getDailyLog(DateTime date) async {
-    final db = await instance.database;
     final dateStr = date.toIso8601String().split('T').first;
+    if (kIsWeb) return _webLogs[dateStr];
+
+    final db = await instance.database;
     final maps = await db.query(
       'daily_logs',
       where: 'log_date = ?',
@@ -166,9 +197,13 @@ class AppDatabase {
   }
 
   Future<void> saveDailyLog(DailyLog log) async {
-    final db = await instance.database;
     final dateStr = log.logDate.toIso8601String().split('T').first;
+    if (kIsWeb) {
+      _webLogs[dateStr] = log;
+      return;
+    }
 
+    final db = await instance.database;
     await db.transaction((txn) async {
       final existing = await txn.query(
         'daily_logs',
@@ -186,7 +221,6 @@ class AppDatabase {
           where: 'id = ?',
           whereArgs: [logId],
         );
-        // Clear existing symptoms to re-insert
         await txn.delete(
           'daily_symptoms',
           where: 'daily_log_id = ?',
@@ -196,7 +230,6 @@ class AppDatabase {
         logId = await txn.insert('daily_logs', log.toMap());
       }
 
-      // Insert symptoms
       for (final symptom in log.symptoms) {
         await txn.insert('daily_symptoms', {
           'daily_log_id': logId,
@@ -208,6 +241,10 @@ class AppDatabase {
   }
 
   Future<List<DailyLog>> getDailyLogsForRange(DateTime start, DateTime end) async {
+    if (kIsWeb) {
+      return _webLogs.values.where((l) => !l.logDate.isBefore(start) && !l.logDate.isAfter(end)).toList();
+    }
+
     final db = await instance.database;
     final startStr = start.toIso8601String().split('T').first;
     final endStr = end.toIso8601String().split('T').first;

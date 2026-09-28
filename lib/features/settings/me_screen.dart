@@ -58,11 +58,12 @@ class MeScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // Settings Group Card
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
+            Material(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(24),
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.divider, width: 0.8),
+                side: const BorderSide(color: AppColors.divider, width: 0.8),
               ),
               child: Column(
                 children: [
